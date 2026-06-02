@@ -1,3 +1,18 @@
+```text
++------------------------------------------------------------------------------+
+|                                                                              |
+|  PPPP  H   H III  SSS  H   H FFFFF  OOO  RRRR  TTTTT    M   M  CCCC PPPP    |
+|  P   P H   H  I  S     H   H F     O   O R   R   T      MM MM C     P   P   |
+|  PPPP  HHHHH  I   SSS  HHHHH FFFF  O   O RRRR    T      M M M C     PPPP    |
+|  P     H   H  I      S H   H F     O   O R  R    T      M   M C     P       |
+|  P     H   H III  SSS  H   H F      OOO  R   R   T      M   M  CCCC P       |
+|                                                                              |
+|        PhishFort Unified Client API -> local stdio MCP tools                  |
+|        approval-gated writes | secret-safe by default | no URL fetching       |
+|                                                                              |
++------------------------------------------------------------------------------+
+```
+
 # phishfort-mcp
 
 Unofficial local MCP server for the [PhishFort Unified Client API](https://phishfort.github.io/unified-client-api-docs/). It exposes PhishFort incident and webhook operations through Model Context Protocol tools with approval gates for mutating calls.
