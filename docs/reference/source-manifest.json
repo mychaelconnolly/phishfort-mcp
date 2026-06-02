@@ -1,0 +1,92 @@
+{
+  "reviewed_at": "2026-06-02T12:51:00-04:00",
+  "source_root": "https://phishfort.github.io/unified-client-api-docs/",
+  "api_base_url": "https://capi.phishfort.com/v1",
+  "raw_copy_policy": "local-only; not intended for public repository tracking",
+  "notes": [
+    "Public repository references official PhishFort documentation by URL instead of redistributing fetched raw HTML.",
+    "A local raw copy may exist at docs/reference/raw/ for private development, but that path is gitignored."
+  ],
+  "sources": [
+    {
+      "name": "Introduction",
+      "url": "https://phishfort.github.io/unified-client-api-docs/",
+      "status": 200
+    },
+    {
+      "name": "Authentication",
+      "url": "https://phishfort.github.io/unified-client-api-docs/auth/",
+      "status": 200
+    },
+    {
+      "name": "Limits",
+      "url": "https://phishfort.github.io/unified-client-api-docs/limits/",
+      "status": 200
+    },
+    {
+      "name": "Incident Lifecycle",
+      "url": "https://phishfort.github.io/unified-client-api-docs/incident-lifecycle/",
+      "status": 200
+    },
+    {
+      "name": "List Incidents",
+      "url": "https://phishfort.github.io/unified-client-api-docs/incidents/",
+      "status": 200
+    },
+    {
+      "name": "Single Incident",
+      "url": "https://phishfort.github.io/unified-client-api-docs/single-incident/",
+      "status": 200
+    },
+    {
+      "name": "Report Incident",
+      "url": "https://phishfort.github.io/unified-client-api-docs/report-incident/",
+      "status": 200
+    },
+    {
+      "name": "Request Incident Action",
+      "url": "https://phishfort.github.io/unified-client-api-docs/request-incident-review/",
+      "status": 200
+    },
+    {
+      "name": "Add Attachments",
+      "url": "https://phishfort.github.io/unified-client-api-docs/add-attachments/",
+      "status": 200
+    },
+    {
+      "name": "Add Comment",
+      "url": "https://phishfort.github.io/unified-client-api-docs/add-comment/",
+      "status": 200
+    },
+    {
+      "name": "Webhooks",
+      "url": "https://phishfort.github.io/unified-client-api-docs/webhooks/",
+      "status": 200
+    },
+    {
+      "name": "Data Structures",
+      "url": "https://phishfort.github.io/unified-client-api-docs/structures/",
+      "status": 200
+    },
+    {
+      "name": "Hidden Single Incident OpenAPI YAML",
+      "url": "https://phishfort.github.io/unified-client-api-docs/single-incident/single-incident.yml",
+      "status": 200,
+      "note": "Partial hidden OpenAPI file; HTML docs are authoritative where paths conflict."
+    }
+  ],
+  "probes": [
+    {
+      "url": "https://phishfort.github.io/unified-client-api-docs/llms.txt",
+      "status": 404
+    },
+    {
+      "url": "https://phishfort.github.io/unified-client-api-docs/openapi.json",
+      "status": 404
+    },
+    {
+      "url": "https://phishfort.github.io/unified-client-api-docs/swagger.json",
+      "status": 404
+    }
+  ]
+}
