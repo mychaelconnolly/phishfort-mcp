@@ -1,4 +1,6 @@
-```text
+<div align="center">
+
+<pre>
 ██████╗ ██╗  ██╗██╗███████╗██╗  ██╗███████╗ ██████╗ ██████╗ ████████╗
 ██╔══██╗██║  ██║██║██╔════╝██║  ██║██╔════╝██╔═══██╗██╔══██╗╚══██╔══╝
 ██████╔╝███████║██║███████╗███████║█████╗  ██║   ██║██████╔╝   ██║
@@ -12,60 +14,77 @@
                          ██║╚██╔╝██║██║     ██╔═══╝
                          ██║ ╚═╝ ██║╚██████╗██║
                          ╚═╝     ╚═╝ ╚═════╝╚═╝
+</pre>
 
-        PhishFort Unified Client API -> local stdio MCP tools
-        approval-gated writes | secret-safe by default | no URL fetching
-```
+<h1>phishfort-mcp</h1>
 
-# phishfort-mcp
+<p>
+  <strong>A security-first local MCP bridge for the PhishFort Unified Client API.</strong>
+</p>
 
-Unofficial local MCP server for the [PhishFort Unified Client API](https://phishfort.github.io/unified-client-api-docs/). It exposes PhishFort incident and webhook operations through Model Context Protocol tools with approval gates for mutating calls.
+<p>
+  Bring PhishFort incident review, reporting, attachments, comments, and webhook management
+  into your MCP client without handing API keys to tool calls or letting automation mutate state
+  without an approval gate.
+</p>
 
-This project is not affiliated with, endorsed by, or maintained by PhishFort.
+<p>
+  <a href="https://phishfort.github.io/unified-client-api-docs/">Official PhishFort API docs</a>
+  ·
+  <a href="docs/reference/mcp-security-review.md">Security review</a>
+  ·
+  <a href="docs/reference/phishfort-unified-client-api.md">Local reference</a>
+</p>
 
-## Features
+</div>
 
-Read tools:
+> Unofficial project. Not affiliated with, endorsed by, or maintained by PhishFort.
 
-- `phishfort_whoami`
-- `phishfort_list_incidents`
-- `phishfort_get_incident`
-- `phishfort_find_incident_by_subject`
-- `phishfort_list_webhooks`
+## Why This Exists
 
-Mutating tools require a prior `phishfort_plan_change` approval envelope:
+PhishFort has a focused REST API for phishing incident workflows. MCP makes that API usable from agentic tools, but security matters: incident data can contain hostile text, URLs should not be fetched casually, and takedown or webhook operations should not happen from a loose prompt.
 
-- `phishfort_report_incident`
-- `phishfort_request_incident_action`
-- `phishfort_add_attachments`
-- `phishfort_add_comment`
-- `phishfort_create_webhook`
-- `phishfort_update_webhook`
-- `phishfort_delete_webhook`
-- `phishfort_test_webhook`
-- `phishfort_rotate_webhook_secret`
+`phishfort-mcp` wraps the API as local `stdio` MCP tools with conservative defaults:
 
-MCP resources:
+- read incident and webhook state quickly
+- report takedown or monitoring requests when you mean to
+- attach evidence without exposing arbitrary local files
+- manage webhooks without leaking one-time secrets
+- require explicit approval fields before any mutating API call
+
+## What You Can Do
+
+| Workflow | Tools |
+| --- | --- |
+| Check identity and client scope | `phishfort_whoami` |
+| Search and inspect incidents | `phishfort_list_incidents`, `phishfort_get_incident`, `phishfort_find_incident_by_subject` |
+| Report URLs, domains, emails, phones, and IPv4 subjects | `phishfort_report_incident` |
+| Request takedown, monitoring, or safe review | `phishfort_request_incident_action` |
+| Add evidence and analyst context | `phishfort_add_attachments`, `phishfort_add_comment` |
+| Manage webhook subscriptions | `phishfort_list_webhooks`, `phishfort_create_webhook`, `phishfort_update_webhook`, `phishfort_delete_webhook`, `phishfort_test_webhook`, `phishfort_rotate_webhook_secret` |
+| Verify incoming webhook deliveries | `phishfort_verify_webhook_signature` |
+
+The server also exposes MCP resources for the distilled API reference, source manifest, and security review:
 
 - `phishfort://reference/summary`
 - `phishfort://reference/source-manifest`
 - `phishfort://reference/security-review`
 
-## Security Model
+## Safety Built In
 
 - `stdio` transport only for v1.
 - Credentials come from `PHISHFORT_API_KEY` or `PHISHFORT_API_KEY_FILE`; never from tool arguments.
-- All incident data, comments, history, URLs, attachment metadata, and webhook payloads are treated as untrusted data.
-- The server does not fetch URLs returned by PhishFort.
-- Writes require signed, expiring approval fields from `phishfort_plan_change`.
+- Incident data, comments, history, URLs, attachment metadata, and webhook payloads are treated as untrusted.
+- URLs returned by PhishFort are never fetched by the server.
+- Mutating tools require an expiring approval envelope from `phishfort_plan_change`.
 - Destructive writes require `destructive_confirmed=true`.
-- Webhook secrets are written to `0600` files and not returned in tool output.
+- Webhook create/rotate secrets are saved to `0600` files and removed from tool output.
 - Attachment uploads are restricted to configured local roots, safe extensions, max 12 files, and 10 MiB total request size.
 - Default API base is pinned to `https://capi.phishfort.com/v1`.
 
-See [MCP security review](docs/reference/mcp-security-review.md) for rationale and source links.
+See [MCP security review](docs/reference/mcp-security-review.md) for the reasoning behind these choices.
 
-## Install
+## Quick Start
 
 ```bash
 git clone https://github.com/mychaelconnolly/phishfort-mcp.git
@@ -82,7 +101,7 @@ $EDITOR ~/.config/phishfort-mcp/phishfort-api-key.txt
 chmod 600 ~/.config/phishfort-mcp/phishfort-api-key.txt
 ```
 
-Run local CLI smoke:
+Run a local CLI smoke:
 
 ```bash
 uv run phishfort-mcp --help
@@ -106,29 +125,27 @@ A fresh Codex session may be required before new MCP tools are discoverable.
 
 ## Configuration
 
-Environment variables:
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `PHISHFORT_API_BASE_URL` | `https://capi.phishfort.com/v1` | Pinned to official API host unless override is enabled. |
+| `PHISHFORT_API_KEY` | unset | Useful for short-lived local shells. |
+| `PHISHFORT_API_KEY_FILE` | unset | Preferred for MCP registration. |
+| `PHISHFORT_SECRET_DIR` | `~/.config/phishfort-mcp/secrets` | Webhook secrets are written here with `0600` permissions. |
+| `PHISHFORT_ATTACHMENT_ROOTS` | `.` | Comma-separated roots allowed for attachment uploads. |
+| `PHISHFORT_TIMEOUT_SECONDS` | `30` | HTTP request timeout. |
+| `PHISHFORT_MAX_RETRIES` | `3` | Retries apply to `429` and `5xx` only. |
+| `PHISHFORT_ALLOW_CUSTOM_BASE_URL` | `false` | Test-only escape hatch for non-production API hosts. |
+| `PHISHFORT_ALLOW_UNSAFE_WEBHOOK_URL` | `false` | Test-only escape hatch for localhost/private webhook targets. |
 
-- `PHISHFORT_API_BASE_URL`, default `https://capi.phishfort.com/v1`
-- `PHISHFORT_API_KEY`
-- `PHISHFORT_API_KEY_FILE`
-- `PHISHFORT_SECRET_DIR`, default `~/.config/phishfort-mcp/secrets`
-- `PHISHFORT_ATTACHMENT_ROOTS`, default `.`
-- `PHISHFORT_TIMEOUT_SECONDS`, default `30`
-- `PHISHFORT_MAX_RETRIES`, default `3`
-- `PHISHFORT_ALLOW_CUSTOM_BASE_URL`, default `false`
-- `PHISHFORT_ALLOW_UNSAFE_WEBHOOK_URL`, default `false`
+## Approval-Gated Writes
 
-Prefer `PHISHFORT_API_KEY_FILE` for local MCP use.
-
-## Use Pattern
-
-Read tools can be called directly. Mutating tools require:
+Read tools can be called directly. Writes are two-step on purpose:
 
 1. Call `phishfort_plan_change` with `operation` and exact params.
-2. Review returned `warnings`, `risk`, `request_digest`, and `approval_phrase`.
+2. Review `warnings`, `risk`, `request_digest`, and `approval_phrase`.
 3. Call the intended mutating tool with the same params plus `approval_id`, `approval_phrase`, `expires_at`, and `request_digest`.
 
-If params change, rerun `phishfort_plan_change`.
+If anything changes, rerun `phishfort_plan_change`.
 
 ## Verification
 
