@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Added an agent-agnostic paired skill for safe PhishFort MCP workflows.
+
 ## 0.1.0 - 2026-06-02
 
 - Initial local MCP server for PhishFort Unified Client API.

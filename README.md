@@ -57,6 +57,12 @@ The server also exposes MCP resources for the distilled API reference, source ma
 - `phishfort://reference/source-manifest`
 - `phishfort://reference/security-review`
 
+## Paired Skill
+
+This repo ships an agent-agnostic skill in [skills/phishfort-mcp/SKILL.md](skills/phishfort-mcp/SKILL.md). Use it with any skill-capable MCP host to teach the agent the safe operating pattern for this server: read before write, treat incident data as untrusted, never fetch returned URLs by default, and use `phishfort_plan_change` before mutating calls.
+
+The skill keeps detailed workflows in [references/workflows.md](skills/phishfort-mcp/references/workflows.md) and exact tool parameters in [references/tool-map.md](skills/phishfort-mcp/references/tool-map.md).
+
 ## Safety Built In
 
 - `stdio` transport only for v1.
