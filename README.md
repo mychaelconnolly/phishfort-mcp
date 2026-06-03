@@ -1,6 +1,4 @@
-<div align="center">
-
-<pre>
+```text
 ██████╗ ██╗  ██╗██╗███████╗██╗  ██╗███████╗ ██████╗ ██████╗ ████████╗
 ██╔══██╗██║  ██║██║██╔════╝██║  ██║██╔════╝██╔═══██╗██╔══██╗╚══██╔══╝
 ██████╔╝███████║██║███████╗███████║█████╗  ██║   ██║██████╔╝   ██║
@@ -14,29 +12,18 @@
                          ██║╚██╔╝██║██║     ██╔═══╝
                          ██║ ╚═╝ ██║╚██████╗██║
                          ╚═╝     ╚═╝ ╚═════╝╚═╝
-</pre>
 
-<h1>phishfort-mcp</h1>
+        PhishFort Unified Client API -> local stdio MCP tools
+        approval-gated writes | secret-safe by default | no URL fetching
+```
 
-<p>
-  <strong>A security-first local MCP bridge for the PhishFort Unified Client API.</strong>
-</p>
+# phishfort-mcp
 
-<p>
-  Bring PhishFort incident review, reporting, attachments, comments, and webhook management
-  into your MCP client without handing API keys to tool calls or letting automation mutate state
-  without an approval gate.
-</p>
+**A security-first local MCP bridge for the PhishFort Unified Client API.**
 
-<p>
-  <a href="https://phishfort.github.io/unified-client-api-docs/">Official PhishFort API docs</a>
-  ·
-  <a href="docs/reference/mcp-security-review.md">Security review</a>
-  ·
-  <a href="docs/reference/phishfort-unified-client-api.md">Local reference</a>
-</p>
+Bring PhishFort incident review, reporting, attachments, comments, and webhook management into your MCP client without handing API keys to tool calls or letting automation mutate state without an approval gate.
 
-</div>
+[Official PhishFort API docs](https://phishfort.github.io/unified-client-api-docs/) | [Security review](docs/reference/mcp-security-review.md) | [Local reference](docs/reference/phishfort-unified-client-api.md)
 
 > Unofficial project. Not affiliated with, endorsed by, or maintained by PhishFort.
 
