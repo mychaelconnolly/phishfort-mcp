@@ -13,36 +13,45 @@
                          ██║ ╚═╝ ██║╚██████╗██║
                          ╚═╝     ╚═╝ ╚═════╝╚═╝
 
-        PhishFort Unified Client API -> local stdio MCP tools
-        approval-gated writes | secret-safe by default | no URL fetching
+        MCP server + paired agent skill for PhishFort workflows
+        approval-gated writes | secret-safe defaults | no URL fetching
 ```
 
 # phishfort-mcp
 
-**A security-first local MCP bridge for the PhishFort Unified Client API.**
+**A security-first MCP server and paired agent skill for the PhishFort Unified Client API.**
 
-Bring PhishFort incident review, reporting, attachments, comments, and webhook management into your MCP client without handing API keys to tool calls or letting automation mutate state without an approval gate.
+Bring PhishFort incident review, reporting, attachments, comments, and webhook management into your MCP client, then give your agent the workflow playbook for using those tools safely.
 
-[Official PhishFort API docs](https://phishfort.github.io/unified-client-api-docs/) | [Security review](docs/reference/mcp-security-review.md) | [Local reference](docs/reference/phishfort-unified-client-api.md)
+[Paired skill](skills/phishfort-mcp/SKILL.md) | [Official PhishFort API docs](https://phishfort.github.io/unified-client-api-docs/) | [Security review](docs/reference/mcp-security-review.md) | [Local reference](docs/reference/phishfort-unified-client-api.md)
 
 > Unofficial project. Not affiliated with, endorsed by, or maintained by PhishFort.
 
+## About
+
+`phishfort-mcp` is a public, unofficial MCP integration for teams and operators who want PhishFort incident workflows available inside agentic tools without giving up basic operational control. The MCP server provides live API access; the paired skill gives compatible agents the workflow memory needed to use that access consistently.
+
+It is built for local-first use, explicit approvals, and careful handling of phishing data. The goal is not to make incident response fully autonomous. The goal is to make the repetitive parts faster while keeping sensitive actions, secrets, and untrusted content under control.
+
 ## Why This Exists
 
-PhishFort has a focused REST API for phishing incident workflows. MCP makes that API usable from agentic tools, but security matters: incident data can contain hostile text, URLs should not be fetched casually, and takedown or webhook operations should not happen from a loose prompt.
+PhishFort has a focused REST API for phishing incident workflows. MCP makes that API usable from agentic tools, and the paired skill teaches those agents the operating procedure: what to read first, how to plan writes, what data is untrusted, and when to stop for explicit approval.
 
-`phishfort-mcp` wraps the API as local `stdio` MCP tools with conservative defaults:
+That pairing matters because security workflows are not just API calls. Incident data can contain hostile text, URLs should not be fetched casually, and takedown or webhook operations should not happen from a loose prompt.
 
-- read incident and webhook state quickly
-- report takedown or monitoring requests when you mean to
-- attach evidence without exposing arbitrary local files
-- manage webhooks without leaking one-time secrets
-- require explicit approval fields before any mutating API call
+`phishfort-mcp` ships two pieces that work together:
+
+- a local `stdio` MCP server for live PhishFort API access
+- an agent-agnostic skill that turns raw tool access into repeatable, safer workflows
+- approval-gated writes for reporting, actions, evidence, comments, and webhooks
+- secret-safe handling for API keys and one-time webhook secrets
+- untrusted-data guardrails for incident text, URLs, and webhook payloads
 
 ## What You Can Do
 
 | Workflow | Tools |
 | --- | --- |
+| Give agents the PhishFort operating playbook | `skills/phishfort-mcp/SKILL.md` |
 | Check identity and client scope | `phishfort_whoami` |
 | Search and inspect incidents | `phishfort_list_incidents`, `phishfort_get_incident`, `phishfort_find_incident_by_subject` |
 | Report URLs, domains, emails, phones, and IPv4 subjects | `phishfort_report_incident` |
