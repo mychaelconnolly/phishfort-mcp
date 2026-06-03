@@ -24,7 +24,10 @@ Reviewed before implementation:
 - Disable redirects and restrict default API host to `https://capi.phishfort.com/v1`.
 - Do not fetch URLs found in incident data.
 - Bound list output by default and expose pagination.
+- Expose documented limits through a read-only tool/resource so agents can plan within known caps.
+- Honor `Retry-After` on `429`, but cap it locally to avoid unbounded sleeps.
 - Restrict webhook target URLs to HTTPS public hosts unless unsafe local test flag is set.
+- Preflight webhook creation against the documented 5-subscription client limit when the list response shape is recognizable.
 - Restrict attachment file reads to configured local roots and validate symlink-resolved paths.
 - Store webhook secrets to `0600` files and return only path plus checksum prefix.
 

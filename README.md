@@ -52,6 +52,7 @@ That pairing matters because security workflows are not just API calls. Incident
 | Workflow | Tools |
 | --- | --- |
 | Give agents the PhishFort operating playbook | `skills/phishfort-mcp/SKILL.md` |
+| Check documented API limits | `phishfort_get_limits` |
 | Check identity and client scope | `phishfort_whoami` |
 | Search and inspect incidents | `phishfort_list_incidents`, `phishfort_get_incident`, `phishfort_find_incident_by_subject` |
 | Report URLs, domains, emails, phones, and IPv4 subjects | `phishfort_report_incident` |
@@ -63,6 +64,7 @@ That pairing matters because security workflows are not just API calls. Incident
 The server also exposes MCP resources for the distilled API reference, source manifest, and security review:
 
 - `phishfort://reference/summary`
+- `phishfort://reference/limits`
 - `phishfort://reference/source-manifest`
 - `phishfort://reference/security-review`
 
@@ -70,7 +72,7 @@ The server also exposes MCP resources for the distilled API reference, source ma
 
 This repo ships an agent-agnostic skill in [skills/phishfort-mcp/SKILL.md](skills/phishfort-mcp/SKILL.md). Use it with any skill-capable MCP host to teach the agent the safe operating pattern for this server: read before write, treat incident data as untrusted, never fetch returned URLs by default, and use `phishfort_plan_change` before mutating calls.
 
-The skill keeps detailed workflows in [references/workflows.md](skills/phishfort-mcp/references/workflows.md) and exact tool parameters in [references/tool-map.md](skills/phishfort-mcp/references/tool-map.md).
+The skill keeps detailed workflows in [references/workflows.md](skills/phishfort-mcp/references/workflows.md), exact tool parameters in [references/tool-map.md](skills/phishfort-mcp/references/tool-map.md), and points agents to `phishfort_get_limits` before workflows where limits change the right next step.
 
 ## Safety Built In
 
@@ -81,7 +83,9 @@ The skill keeps detailed workflows in [references/workflows.md](skills/phishfort
 - Mutating tools require an expiring approval envelope from `phishfort_plan_change`.
 - Destructive writes require `destructive_confirmed=true`.
 - Webhook create/rotate secrets are saved to `0600` files and removed from tool output.
+- Webhook creation preflights the documented 5-subscription client limit before attempting a write.
 - Attachment uploads are restricted to configured local roots, safe extensions, max 12 files, and 10 MiB total request size.
+- Retries are limited to `429` and `5xx`; `Retry-After` is honored on `429` within a bounded cap.
 - Default API base is pinned to `https://capi.phishfort.com/v1`.
 
 See [MCP security review](docs/reference/mcp-security-review.md) for the reasoning behind these choices.
@@ -135,7 +139,7 @@ A fresh Codex session may be required before new MCP tools are discoverable.
 | `PHISHFORT_SECRET_DIR` | `~/.config/phishfort-mcp/secrets` | Webhook secrets are written here with `0600` permissions. |
 | `PHISHFORT_ATTACHMENT_ROOTS` | `.` | Comma-separated roots allowed for attachment uploads. |
 | `PHISHFORT_TIMEOUT_SECONDS` | `30` | HTTP request timeout. |
-| `PHISHFORT_MAX_RETRIES` | `3` | Retries apply to `429` and `5xx` only. |
+| `PHISHFORT_MAX_RETRIES` | `3` | Retries apply to `429` and `5xx` only; `Retry-After` on `429` is capped locally. |
 | `PHISHFORT_ALLOW_CUSTOM_BASE_URL` | `false` | Test-only escape hatch for non-production API hosts. |
 | `PHISHFORT_ALLOW_UNSAFE_WEBHOOK_URL` | `false` | Test-only escape hatch for localhost/private webhook targets. |
 

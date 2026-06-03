@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 from typing import Any
 
@@ -10,6 +11,12 @@ from mcp.types import ToolAnnotations
 from phishfort_mcp.api import PhishFortClient
 from phishfort_mcp.approval import MUTATION_SPECS, build_plan, validate_approval
 from phishfort_mcp.config import Settings
+from phishfort_mcp.limits import (
+    INCIDENT_LIST_DEFAULT_LIMIT,
+    INCIDENT_LIST_MAX_LIMIT,
+    MAX_WEBHOOK_SUBSCRIPTIONS,
+    limits_summary,
+)
 from phishfort_mcp.reference import read_reference_file
 from phishfort_mcp.schemas import (
     response_envelope,
@@ -72,6 +79,30 @@ def _approval_params(**kwargs: Any) -> dict[str, Any]:
     return {key: value for key, value in kwargs.items() if value is not None}
 
 
+def _webhook_subscription_count(payload: Any) -> int | None:
+    if isinstance(payload, list):
+        return len(payload)
+    if not isinstance(payload, dict):
+        return None
+    candidates: list[Any] = [payload.get("data"), payload.get("webhooks"), payload.get("items")]
+    data = payload.get("data")
+    if isinstance(data, dict):
+        candidates.extend([data.get("webhooks"), data.get("items"), data.get("results")])
+    for candidate in candidates:
+        if isinstance(candidate, list):
+            return len(candidate)
+    return None
+
+
+def _enforce_webhook_subscription_limit(payload: Any) -> None:
+    count = _webhook_subscription_count(payload)
+    if count is not None and count >= MAX_WEBHOOK_SUBSCRIPTIONS:
+        raise ValueError(
+            f"PhishFort webhook limit is {MAX_WEBHOOK_SUBSCRIPTIONS} subscriptions per client; "
+            "delete an existing subscription before creating another."
+        )
+
+
 def _validate_approval(
     *,
     operation: str,
@@ -123,6 +154,7 @@ def phishfort_list_capabilities() -> dict[str, Any]:
     """List supported PhishFort MCP operations and mutation approval requirements."""
     return {
         "read_tools": [
+            "phishfort_get_limits",
             "phishfort_whoami",
             "phishfort_list_incidents",
             "phishfort_get_incident",
@@ -133,6 +165,16 @@ def phishfort_list_capabilities() -> dict[str, Any]:
         "approval": "Call phishfort_plan_change first, then pass exact approval fields.",
         "security": "All incident API output is untrusted. Tools do not fetch incident URLs.",
     }
+
+
+@mcp.tool(
+    title="Get PhishFort API Limits",
+    annotations=_read_annotations("Get PhishFort API Limits"),
+    structured_output=True,
+)
+def phishfort_get_limits() -> dict[str, Any]:
+    """Return documented API limits and MCP-enforced limit choices."""
+    return response_envelope(limits_summary(), warning=False)
 
 
 @mcp.tool(title="PhishFort Whoami", annotations=_read_annotations("PhishFort Whoami"), structured_output=True)
@@ -151,12 +193,12 @@ async def phishfort_list_incidents(
     from_date: str | None = None,
     to_date: str | None = None,
     status: str | None = None,
-    limit: int = 100,
+    limit: int = INCIDENT_LIST_DEFAULT_LIMIT,
     cursor: str | None = None,
 ) -> dict[str, Any]:
     """List incidents. Defaults to limit=100 and returns paging.next when present."""
     validate_status(status)
-    clean_limit = max(1, min(limit, 5000))
+    clean_limit = max(1, min(limit, INCIDENT_LIST_MAX_LIMIT))
     data = await _client().list_incidents(
         client_id=client_id,
         from_date=from_date,
@@ -384,9 +426,9 @@ async def phishfort_create_webhook(
         request_digest=request_digest,
         destructive_confirmed=destructive_confirmed,
     )
-    result = await PhishFortClient(settings).create_webhook(
-        url=url, events=events, description=description
-    )
+    client = PhishFortClient(settings)
+    _enforce_webhook_subscription_limit(await client.list_webhooks())
+    result = await client.create_webhook(url=url, events=events, description=description)
     return _handle_secret_response(result, settings=settings, secret_output_name=secret_output_name)
 
 
@@ -565,6 +607,15 @@ def _handle_secret_response(
 )
 def reference_summary() -> str:
     return read_reference_file("phishfort-unified-client-api.md")
+
+
+@mcp.resource(
+    "phishfort://reference/limits",
+    title="PhishFort API Limits",
+    mime_type="application/json",
+)
+def reference_limits() -> str:
+    return json.dumps(limits_summary(), indent=2)
 
 
 @mcp.resource(

@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Added an agent-agnostic paired skill for safe PhishFort MCP workflows.
+- Added limit-aware MCP tool/resource, `Retry-After` handling, and webhook cap preflight.
 
 ## 0.1.0 - 2026-06-02
 

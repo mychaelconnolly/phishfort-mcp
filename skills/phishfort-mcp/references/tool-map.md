@@ -7,6 +7,7 @@ Use exact names when available. If the MCP host prefixes or namespaces tools, ma
 | Tool | Purpose | Key params |
 | --- | --- | --- |
 | `phishfort_list_capabilities` | Show supported operations and approval policy. | none |
+| `phishfort_get_limits` | Show documented API limits and MCP-enforced limit choices. | none |
 | `phishfort_whoami` | Check auth/client identity and client scope. | none |
 | `phishfort_list_incidents` | List incidents with filters and pagination. | `client_id`, `from_date`, `to_date`, `status`, `limit`, `cursor` |
 | `phishfort_get_incident` | Fetch one incident by id. | `incident_id` |
@@ -42,7 +43,7 @@ If any operation param changes, discard the plan and call `phishfort_plan_change
 | `request_incident_action` | `phishfort_request_incident_action` | `incident_id`, `action` | `action` is `tkd`, `monitor`, or `safe`. Treat `safe` as high-impact user intent. |
 | `add_attachments` | `phishfort_add_attachments` | `incident_id`, `attachment_paths` | Supported extensions only; max 12 files; total request under 10 MiB. |
 | `add_comment` | `phishfort_add_comment` | `incident_id`, `comment` | Comment must be nonblank. |
-| `create_webhook` | `phishfort_create_webhook` | `url`, `events` | Optional `description`, `secret_output_name`; secret is saved locally, not returned. |
+| `create_webhook` | `phishfort_create_webhook` | `url`, `events` | Optional `description`, `secret_output_name`; secret is saved locally, not returned. Server preflights max 5 subscriptions. |
 | `update_webhook` | `phishfort_update_webhook` | `webhook_id` plus at least one update field | Optional `url`, `events`, `active`, `description`. |
 | `delete_webhook` | `phishfort_delete_webhook` | `webhook_id` | Destructive; requires `destructive_confirmed=true`. |
 | `test_webhook` | `phishfort_test_webhook` | `webhook_id` | Sends a test delivery. |
@@ -61,6 +62,7 @@ Every write tool also needs:
 | Resource | Use |
 | --- | --- |
 | `phishfort://reference/summary` | Distilled API behavior, endpoints, limits, structures, and webhook signature details. |
+| `phishfort://reference/limits` | JSON summary of pagination, attachment, retry, and webhook limits. |
 | `phishfort://reference/source-manifest` | Official docs URL set used for the local reference. |
 | `phishfort://reference/security-review` | Security choices behind the MCP server and skill workflows. |
 

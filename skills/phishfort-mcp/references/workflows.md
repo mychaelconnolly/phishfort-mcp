@@ -12,6 +12,7 @@ Use these workflows when a user asks for a concrete PhishFort task. Keep inciden
    - `from_date` and `to_date` for time windows.
    - `client_id` when working with a sub-client.
    - Start with small `limit`; continue with `paging.next` only when needed.
+   - Use `phishfort_get_limits` if deciding page size or explaining retry behavior.
 5. Summarize:
    - incident id and status
    - subject, domain, URL, or incident type
@@ -83,11 +84,12 @@ Use `phishfort_list_webhooks` before changes unless the webhook id and intended 
 ### Create
 
 1. Require an HTTPS public URL unless explicit local test configuration is in place.
-2. Choose event values from the valid webhook event list.
-3. Optional: set `description` and `secret_output_name`.
-4. Plan with `operation="create_webhook"`.
-5. Apply with `phishfort_create_webhook`.
-6. Report only the saved secret file path/checksum prefix returned by the tool, not the secret contents.
+2. Call `phishfort_list_webhooks`; if there are already 5 subscriptions, stop and ask which existing subscription should be deleted or reused.
+3. Choose event values from the valid webhook event list.
+4. Optional: set `description` and `secret_output_name`.
+5. Plan with `operation="create_webhook"`.
+6. Apply with `phishfort_create_webhook`.
+7. Report only the saved secret file path/checksum prefix returned by the tool, not the secret contents.
 
 ### Update
 
@@ -128,6 +130,7 @@ Use `phishfort_list_webhooks` before changes unless the webhook id and intended 
 - `401` or `403`: likely invalid key or insufficient client access.
 - `404`: incident or webhook id not found, or subject lookup has no match.
 - `413`: attachment request exceeds 10 MiB.
+- Webhook limit: each client can have up to 5 subscriptions; list and delete or reuse an existing webhook before creating another.
 - Approval digest mismatch: params changed after planning; rerun `phishfort_plan_change`.
 - Approval expired: rerun `phishfort_plan_change`.
 - Unsafe webhook URL: use HTTPS public target or explicitly configure unsafe local testing.

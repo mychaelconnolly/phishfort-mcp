@@ -10,24 +10,11 @@ from typing import Any
 from urllib.parse import urlparse
 
 from phishfort_mcp.config import Settings
-
-
-ALLOWED_ATTACHMENT_EXTENSIONS = {
-    ".png",
-    ".jpg",
-    ".jpeg",
-    ".pdf",
-    ".eml",
-    ".txt",
-    ".msg",
-    ".csv",
-    ".doc",
-    ".docx",
-    ".xls",
-    ".xlsx",
-}
-MAX_ATTACHMENT_FILES = 12
-MAX_MULTIPART_BYTES = 10 * 1024 * 1024
+from phishfort_mcp.limits import (
+    ALLOWED_ATTACHMENT_EXTENSIONS,
+    MAX_ATTACHMENT_FILES,
+    MAX_MULTIPART_BYTES,
+)
 PRIVATE_HOSTNAMES = {"localhost", "localhost.localdomain"}
 
 

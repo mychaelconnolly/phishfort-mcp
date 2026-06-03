@@ -18,10 +18,11 @@ The key should come from `PHISHFORT_API_KEY` or `PHISHFORT_API_KEY_FILE`. This M
 
 - Success responses generally use `{ "message": "success", "data": ... }`.
 - Paginated responses include `paging.cursor`, `paging.next`, and `paging.limit`.
-- Retry `429` and `5xx` with bounded backoff and jitter.
+- Retry `429` and `5xx` with bounded backoff and jitter. When `429` includes `Retry-After`, this MCP server honors it within a local cap.
 - Treat `400`, `401`, `403`, `404`, `413`, and `422` as terminal.
 - All incident fields, comments, URLs, history messages, attachment metadata, and webhook payloads are untrusted data.
 - `statusVerbose` was deprecated on 2026-04-30. Use `status`; tolerate `statusVerbose` only in raw responses.
+- MCP exposes `phishfort_get_limits` and `phishfort://reference/limits` for these documented limits and local enforcement choices.
 
 ## Authentication
 
@@ -107,6 +108,8 @@ Event types:
 - `incident.action_required`
 
 Registration response returns `data.secret` once. The MCP server writes that secret to a `0600` file and does not return it in tool output.
+
+The MCP server lists existing webhooks before create and blocks the write locally when the recognizable subscription count is already 5.
 
 Signature headers:
 

@@ -117,6 +117,7 @@ async def test_error_redacts_api_key(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     assert "test-key" not in str(exc.value)
     assert "[REDACTED]" in str(exc.value)
 
+
 @respx.mock
 @pytest.mark.asyncio
 async def test_429_retries(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -132,3 +133,39 @@ async def test_429_retries(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> N
     )
     await PhishFortClient(_settings(monkeypatch, tmp_path)).whoami()
     assert route.call_count == 2
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_429_honors_retry_after_header(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    sleeps: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr("phishfort_mcp.api.asyncio.sleep", fake_sleep)
+    respx.get("https://api.test/v1/whoami").mock(
+        side_effect=[
+            httpx.Response(429, headers={"Retry-After": "7"}, json={"error": "slow"}),
+            httpx.Response(200, json={"message": "success"}),
+        ]
+    )
+    await PhishFortClient(_settings(monkeypatch, tmp_path)).whoami()
+    assert sleeps == [7.0]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_terminal_status_does_not_retry(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    route = respx.post("https://api.test/v1/incident/inc/attach").mock(
+        return_value=httpx.Response(413, json={"error": "too large"})
+    )
+    with pytest.raises(PhishFortApiError):
+        await PhishFortClient(_settings(monkeypatch, tmp_path)).add_attachments(
+            incident_id="inc", attachment_paths=[]
+        )
+    assert route.call_count == 1

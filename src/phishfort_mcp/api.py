@@ -3,16 +3,20 @@ from __future__ import annotations
 import asyncio
 import json
 import random
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any
 from urllib.parse import quote
 
 import httpx
 
 from phishfort_mcp.config import Settings
+from phishfort_mcp.limits import (
+    MAX_RETRY_AFTER_SECONDS,
+    RETRYABLE_STATUS_CODES,
+    TERMINAL_STATUS_CODES,
+)
 from phishfort_mcp.security import close_file_tuples, file_tuple, redact, validate_attachment_paths
-
-
-TERMINAL_STATUS_CODES = {400, 401, 403, 404, 413, 422}
 
 
 class PhishFortApiError(RuntimeError):
@@ -69,9 +73,16 @@ class PhishFortClient:
                         return parsed
                     if response.status_code in TERMINAL_STATUS_CODES:
                         raise self._error(method, clean_path, response.status_code, parsed)
-                    if response.status_code in {429} or response.status_code >= 500:
+                    if response.status_code in RETRYABLE_STATUS_CODES or response.status_code >= 500:
                         if attempt < self.settings.max_retries:
-                            await asyncio.sleep(self._backoff_seconds(attempt))
+                            delay = (
+                                self._retry_after_seconds(response)
+                                if response.status_code == 429
+                                else None
+                            )
+                            await asyncio.sleep(
+                                delay if delay is not None else self._backoff_seconds(attempt)
+                            )
                             continue
                     raise self._error(method, clean_path, response.status_code, parsed)
         finally:
@@ -215,6 +226,23 @@ class PhishFortClient:
     @staticmethod
     def _backoff_seconds(attempt: int) -> float:
         return min(8.0, (2**attempt) * 0.5) + random.uniform(0, 0.25)
+
+    @staticmethod
+    def _retry_after_seconds(response: httpx.Response) -> float | None:
+        raw_value = response.headers.get("Retry-After")
+        if not raw_value:
+            return None
+        try:
+            seconds = float(raw_value)
+        except ValueError:
+            try:
+                retry_at = parsedate_to_datetime(raw_value)
+            except (TypeError, ValueError):
+                return None
+            if retry_at.tzinfo is None:
+                retry_at = retry_at.replace(tzinfo=timezone.utc)
+            seconds = (retry_at - datetime.now(timezone.utc)).total_seconds()
+        return max(0.0, min(seconds, MAX_RETRY_AFTER_SECONDS))
 
     @staticmethod
     def _report_payload(
