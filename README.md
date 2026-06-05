@@ -27,6 +27,36 @@ Bring PhishFort incident review, reporting, attachments, comments, and webhook m
 
 > Unofficial project. Not affiliated with, endorsed by, or maintained by PhishFort.
 
+## Standards-Backed Security Posture
+
+This server was designed against the [Official Model Context Protocol security guidance](https://modelcontextprotocol.io/docs/tutorials/security/security_best_practices), [Anthropic connector guidance](https://claude.com/docs/connectors/building/mcp), [OpenAI MCP guidance](https://developers.openai.com/api/docs/mcp), [OpenAI agent safety guidance](https://developers.openai.com/api/docs/guides/agent-builder-safety), and [PhishFort's official API docs](https://phishfort.github.io/unified-client-api-docs/). The table below lists only security features that are implemented in code, with local evidence.
+
+Local evidence:
+
+- [MCP security review](docs/reference/mcp-security-review.md)
+- [PhishFort API reference](docs/reference/phishfort-unified-client-api.md)
+- [Source manifest](docs/reference/source-manifest.json)
+
+| Security feature | What it prevents | Confirmed implementation |
+| --- | --- | --- |
+| Local `stdio` transport only | Avoids exposing a public HTTP MCP surface in v1 | `server.main()` rejects non-`stdio` transport |
+| Approval-gated writes | Prevents prompt-only mutation of PhishFort state | Write tools require `approval_id`, `approval_phrase`, `expires_at`, `request_digest`; `_validate_approval()` checks them |
+| Tamper-resistant approval digest | Blocks changing params after approval planning | `approval.py` canonicalizes params and verifies `request_digest`; covered by `test_approval_rejects_tampered_params` |
+| Destructive confirmation | Adds explicit friction for delete/rotate operations | Destructive specs require `destructive_confirmed=true`; covered by `test_destructive_operation_requires_confirmed` |
+| Read/write MCP annotations | Gives MCP hosts correct safety hints | `_read_annotations()` and `_write_annotations()` set read-only/destructive/idempotent hints |
+| API keys never passed as tool args | Reduces credential leakage through prompts/tool logs | `Settings` reads `PHISHFORT_API_KEY` or `PHISHFORT_API_KEY_FILE`; tool signatures do not accept API keys |
+| Default API host pinning | Avoids accidental credential use against arbitrary hosts | `Settings.validate_base_url()` requires `https://capi.phishfort.com/v1` unless explicit override is enabled |
+| Redirects disabled | Avoids following API responses to unexpected locations | `httpx.AsyncClient(..., follow_redirects=False)` |
+| Error redaction | Prevents API keys from leaking through raised API errors | `PhishFortClient._error()` applies `redact()`; covered by `test_error_redacts_api_key` |
+| Untrusted data warnings | Reminds agents not to treat incident content as instructions | `response_envelope()` adds `untrusted_data_warning` to PhishFort data outputs |
+| No generic URL fetching | Avoids browsing hostile URLs returned in incident data | Server exposes PhishFort API tools only; no tool fetches incident URLs |
+| Attachment file restrictions | Reduces local file exfiltration risk | `validate_attachment_paths()` enforces roots, extensions, max 12 files, and 10 MiB cap; covered by attachment tests |
+| Webhook URL SSRF guard | Blocks localhost/private/reserved webhook targets by default | `validate_webhook_url()` and `is_private_host()`; covered by webhook URL tests |
+| Webhook secret containment | Keeps one-time secrets out of tool output | `_handle_secret_response()` removes `secret`; `write_secret_file()` writes `0600`; covered by secret tests |
+| Webhook signature verification | Enables receiver-side HMAC verification | `verify_signature()` uses HMAC-SHA256 and `hmac.compare_digest()`; covered by `test_verify_signature` |
+| Limit-aware behavior | Avoids known API limit failures where possible | `phishfort_get_limits`, `reference_limits`, incident limit clamp, webhook 5-subscription preflight; covered by `tests/test_limits.py` |
+| Bounded retry behavior | Avoids unsafe retry storms or unbounded sleeps | Retries only `429`/`5xx`, treats terminal statuses as terminal, caps `Retry-After`; covered by retry tests |
+
 ## About
 
 `phishfort-mcp` is a public, unofficial MCP integration for teams and operators who want PhishFort incident workflows available inside agentic tools without giving up basic operational control. The MCP server provides live API access; the paired skill gives compatible agents the workflow memory needed to use that access consistently.
@@ -76,17 +106,7 @@ The skill keeps detailed workflows in [references/workflows.md](skills/phishfort
 
 ## Safety Built In
 
-- `stdio` transport only for v1.
-- Credentials come from `PHISHFORT_API_KEY` or `PHISHFORT_API_KEY_FILE`; never from tool arguments.
-- Incident data, comments, history, URLs, attachment metadata, and webhook payloads are treated as untrusted.
-- URLs returned by PhishFort are never fetched by the server.
-- Mutating tools require an expiring approval envelope from `phishfort_plan_change`.
-- Destructive writes require `destructive_confirmed=true`.
-- Webhook create/rotate secrets are saved to `0600` files and removed from tool output.
-- Webhook creation preflights the documented 5-subscription client limit before attempting a write.
-- Attachment uploads are restricted to configured local roots, safe extensions, max 12 files, and 10 MiB total request size.
-- Retries are limited to `429` and `5xx`; `Retry-After` is honored on `429` within a bounded cap.
-- Default API base is pinned to `https://capi.phishfort.com/v1`.
+The standards-backed table above is the detailed proof. Operationally, the server stays local-first, keeps credentials out of tool arguments, treats PhishFort data as untrusted, gates writes through `phishfort_plan_change`, stores webhook secrets outside tool output, and constrains attachments, webhook URLs, limits, and retries.
 
 See [MCP security review](docs/reference/mcp-security-review.md) for the reasoning behind these choices.
 
