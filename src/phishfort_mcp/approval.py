@@ -31,6 +31,7 @@ MUTATION_SPECS: dict[str, MutationSpec] = {
         "/incident/{incident_id}/{action}",
         "Request takedown, monitoring, or safe removal review",
         "high",
+        True,
     ),
     "add_attachments": MutationSpec(
         "add_attachments", "POST", "/incident/{incident_id}/attach", "Add incident attachments", "medium"

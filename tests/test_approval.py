@@ -62,6 +62,24 @@ def test_destructive_operation_requires_confirmed() -> None:
         )
 
 
+def test_request_incident_action_requires_confirmed() -> None:
+    params = {"incident_id": "inc_1", "action": "tkd"}
+    plan = build_plan(
+        operation="request_incident_action", params=params, expires_in_seconds=900, salt="salt"
+    )
+    with pytest.raises(ValueError, match="destructive_confirmed"):
+        validate_approval(
+            operation="request_incident_action",
+            params=params,
+            expires_at=plan["expires_at"],
+            approval_id=plan["approval_id"],
+            approval_phrase=plan["approval_phrase"],
+            request_digest=plan["request_digest"],
+            destructive_confirmed=False,
+            salt="salt",
+        )
+
+
 def test_expired_plan_rejected() -> None:
     params = {"webhook_id": "wh_1"}
     plan = build_plan(
