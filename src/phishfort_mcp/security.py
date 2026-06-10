@@ -5,6 +5,7 @@ import hmac
 import ipaddress
 import mimetypes
 import os
+import socket
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -67,14 +68,34 @@ def scrub_secrets(value: Any) -> tuple[Any, dict[str, str]]:
     return _walk(value), found
 
 
+def _legacy_ipv4(host: str) -> ipaddress.IPv4Address | None:
+    """Resolve non-canonical IPv4 forms (decimal/octal/hex) that URL stacks accept.
+
+    e.g. "2130706433", "0x7f.1", "0177.0.0.1" all map to 127.0.0.1; the stdlib
+    ``ipaddress`` parser rejects them, so they would otherwise slip past as plain
+    hostnames.
+    """
+    if not host or host[0] not in "0123456789":
+        return None
+    try:
+        packed = socket.inet_aton(host)
+    except OSError:
+        return None
+    return ipaddress.IPv4Address(packed)
+
+
 def is_private_host(hostname: str) -> bool:
     lowered = hostname.strip().lower().rstrip(".")
     if lowered in PRIVATE_HOSTNAMES or lowered.endswith(".localhost"):
         return True
+    candidate = lowered.strip("[]")
     try:
-        address = ipaddress.ip_address(lowered.strip("[]"))
+        address = ipaddress.ip_address(candidate)
     except ValueError:
-        return False
+        legacy = _legacy_ipv4(candidate)
+        if legacy is None:
+            return False
+        address = legacy
     return (
         address.is_private
         or address.is_loopback
