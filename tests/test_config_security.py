@@ -8,6 +8,7 @@ import pytest
 
 from phishfort_mcp.config import Settings
 from phishfort_mcp.security import (
+    scrub_secrets,
     validate_attachment_paths,
     validate_webhook_url,
     verify_signature,
@@ -72,6 +73,35 @@ def test_write_secret_file_uses_0600(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     path = Path(saved["secret_file"])
     assert path.read_text(encoding="utf-8").strip() == "webhook-secret"
     assert oct(path.stat().st_mode & 0o777) == "0o600"
+
+
+def test_scrub_secrets_removes_nested_and_listed_keys() -> None:
+    payload = {
+        "message": "success",
+        "data": {
+            "id": "wh_new",
+            "webhook": {"secret": "top-secret"},
+            "items": [{"token": "tok"}, {"keep": "ok"}],
+        },
+    }
+    scrubbed, found = scrub_secrets(payload)
+    assert found == {"secret": "top-secret", "token": "tok"}
+    assert scrubbed["data"]["webhook"] == {}
+    assert scrubbed["data"]["items"] == [{}, {"keep": "ok"}]
+    assert "secret" not in str(scrubbed)
+    assert "tok" not in str(scrubbed)
+
+
+def test_write_secret_file_rejects_symlink(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    secret_dir = tmp_path / "secrets"
+    secret_dir.mkdir()
+    target = tmp_path / "target.txt"
+    (secret_dir / "hook-secret.txt").symlink_to(target)
+    monkeypatch.setenv("PHISHFORT_SECRET_DIR", str(secret_dir))
+    settings = Settings.from_env()
+    with pytest.raises(OSError):
+        write_secret_file("leak", settings=settings, name="hook-secret")
+    assert not target.exists()
 
 
 def test_verify_signature() -> None:

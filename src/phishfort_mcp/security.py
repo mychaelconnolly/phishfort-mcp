@@ -16,6 +16,7 @@ from phishfort_mcp.limits import (
     MAX_MULTIPART_BYTES,
 )
 PRIVATE_HOSTNAMES = {"localhost", "localhost.localdomain"}
+SENSITIVE_RESPONSE_KEYS = {"secret", "webhooksecret", "token", "apikey", "api_key"}
 
 
 def redact(value: Any, *secrets: str | None) -> Any:
@@ -30,6 +31,33 @@ def redact(value: Any, *secrets: str | None) -> Any:
         if secret:
             redacted = redacted.replace(secret, "[REDACTED]")
     return redacted
+
+
+def scrub_secrets(value: Any) -> tuple[Any, dict[str, str]]:
+    """Recursively strip sensitive keys from an API response.
+
+    Returns the scrubbed value plus a mapping of removed key (lowercased) to the
+    first string value seen, so callers can persist a one-time webhook secret
+    without it ever reaching tool output. Removal is by key name regardless of
+    nesting depth or response shape.
+    """
+    found: dict[str, str] = {}
+
+    def _walk(node: Any) -> Any:
+        if isinstance(node, dict):
+            cleaned: dict[str, Any] = {}
+            for key, item in node.items():
+                if isinstance(key, str) and key.lower() in SENSITIVE_RESPONSE_KEYS:
+                    if isinstance(item, str):
+                        found.setdefault(key.lower(), item)
+                    continue
+                cleaned[key] = _walk(item)
+            return cleaned
+        if isinstance(node, list):
+            return [_walk(item) for item in node]
+        return node
+
+    return _walk(value), found
 
 
 def is_private_host(hostname: str) -> bool:
@@ -102,17 +130,23 @@ def close_file_tuples(files: list[tuple[str, tuple[str, Any, str]]]) -> None:
 
 def write_secret_file(secret: str, *, settings: Settings, name: str | None = None) -> dict[str, str]:
     settings.secret_dir.mkdir(parents=True, exist_ok=True)
+    os.chmod(settings.secret_dir, 0o700)
+    resolved_dir = settings.secret_dir.resolve(strict=True)
     digest = hashlib.sha256(secret.encode("utf-8")).hexdigest()
     safe_name = (name or f"phishfort-webhook-{digest[:12]}.txt").replace("/", "_")
     if not safe_name.endswith(".txt"):
         safe_name = f"{safe_name}.txt"
-    path = settings.secret_dir / safe_name
-    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+    path = resolved_dir / safe_name
+    if path.parent != resolved_dir:
+        raise ValueError("secret file name must not escape the secret directory")
+    # O_NOFOLLOW: refuse to write through an attacker-planted symlink in the
+    # secret dir. O_TRUNC (not O_EXCL) so rotation can overwrite a reused name.
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW
     fd = os.open(path, flags, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        os.fchmod(handle.fileno(), 0o600)
         handle.write(secret)
         handle.write("\n")
-    os.chmod(path, 0o600)
     return {"secret_file": str(path), "secret_sha256_prefix": digest[:16]}
 
 
