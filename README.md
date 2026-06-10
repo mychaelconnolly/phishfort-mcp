@@ -19,13 +19,38 @@
 
 # phishfort-mcp
 
+![security: reviewed & hardened](https://img.shields.io/badge/security-reviewed%20%26%20hardened-2ea44f)
+![tests: 35 passing](https://img.shields.io/badge/tests-35%20passing-2ea44f)
+![python: 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
+![license: MIT](https://img.shields.io/badge/license-MIT-blue)
+
 **A security-first MCP server and paired agent skill for the PhishFort Unified Client API.**
+
+**Security-reviewed and hardened — 2026-06-10.** Approval-gated writes · secret-safe by default · no incident-URL fetching · every security claim verified against the code.
 
 Bring PhishFort incident review, reporting, attachments, comments, and webhook management into your MCP client, then give your agent the workflow playbook for using those tools safely.
 
 [Paired skill](skills/phishfort-mcp/SKILL.md) | [Official PhishFort API docs](https://phishfort.github.io/unified-client-api-docs/) | [Security review](docs/reference/mcp-security-review.md) | [Local reference](docs/reference/phishfort-unified-client-api.md)
 
 > Unofficial project. Not affiliated with, endorsed by, or maintained by PhishFort.
+
+## Security, reviewed in the open
+
+This is a security tool, so the security work is the headline — not a disclaimer at the bottom. Every control is implemented in code, covered by tests, and was put through a review-and-harden pass whose results are public.
+
+- **2026-06-02 — v0.1.0.** Local `stdio` MCP server and paired agent skill, security-first by default: approval-gated writes, API host pinning, redirects disabled, and no fetching of incident URLs.
+- **2026-06-05 — Posture mapped to evidence.** Every security feature documented against MCP, OpenAI, and Anthropic guidance, each row tied to the exact code and test behind it.
+- **2026-06-10 — Review and hardening pass.** A security review (self-conducted, cross-checked with a second automated reviewer) drove a six-commit hardening pass:
+  - destructive confirmation is now enforced on incident-action requests — the annotation and the approval gate agree,
+  - secret-named fields are scrubbed recursively, and one-time webhook secrets are written through `O_NOFOLLOW` `0600` files,
+  - retries now cover transport errors, and secret-named fields are redacted from errors,
+  - the approval salt is random and process-stable, and the retry count is bounded,
+  - the webhook URL preflight rejects legacy numeric-IP encodings,
+  - the attachment validate→upload race (TOCTOU) is closed.
+
+  The same pass **reworded every security claim to match what the code enforces** — the approval gate is described as in-process integrity and confirmation, not independent authorization, and the webhook URL check as a pre-submit sanity check. Tests went from 26 to 35.
+
+The table below is the evidence: each control maps to the code and the test that backs it.
 
 ## Standards-Backed Security Posture
 
