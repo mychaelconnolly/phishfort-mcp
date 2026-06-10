@@ -6,6 +6,7 @@ import ipaddress
 import mimetypes
 import os
 import socket
+import stat
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -143,9 +144,30 @@ def validate_attachment_paths(paths: list[str] | None, *, settings: Settings) ->
     return resolved
 
 
-def file_tuple(path: Path) -> tuple[str, tuple[str, Any, str]]:
-    mime_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-    return ("attachments", (path.name, path.open("rb"), mime_type))
+def open_attachments(
+    paths: list[str], *, settings: Settings
+) -> list[tuple[str, tuple[str, Any, str]]]:
+    """Validate and open attachment files, holding the fds to close the TOCTOU window.
+
+    Each resolved path is opened with ``O_NOFOLLOW`` so a symlink swapped in after
+    validation cannot redirect the upload, and ``fstat`` confirms a regular file.
+    The returned handles are uploaded directly, so the bytes sent are the bytes
+    that were validated.
+    """
+    validated = validate_attachment_paths(paths, settings=settings)
+    files: list[tuple[str, tuple[str, Any, str]]] = []
+    try:
+        for path in validated:
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                os.close(fd)
+                raise ValueError(f"attachment is not a regular file: {path}")
+            mime_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+            files.append(("attachments", (path.name, os.fdopen(fd, "rb"), mime_type)))
+    except BaseException:
+        close_file_tuples(files)
+        raise
+    return files
 
 
 def close_file_tuples(files: list[tuple[str, tuple[str, Any, str]]]) -> None:

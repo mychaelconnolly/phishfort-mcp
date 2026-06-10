@@ -8,6 +8,8 @@ import pytest
 
 from phishfort_mcp.config import Settings
 from phishfort_mcp.security import (
+    close_file_tuples,
+    open_attachments,
     scrub_secrets,
     validate_attachment_paths,
     validate_webhook_url,
@@ -89,6 +91,23 @@ def test_attachment_paths_block_root_escape(monkeypatch: pytest.MonkeyPatch, tmp
     settings = Settings.from_env()
     with pytest.raises(ValueError, match="PHISHFORT_ATTACHMENT_ROOTS"):
         validate_attachment_paths([str(outside)], settings=settings)
+
+
+def test_open_attachments_holds_readable_handle(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "allowed"
+    root.mkdir()
+    proof = root / "proof.pdf"
+    proof.write_bytes(b"%PDF-data")
+    monkeypatch.setenv("PHISHFORT_ATTACHMENT_ROOTS", str(root))
+    settings = Settings.from_env()
+    files = open_attachments([str(proof)], settings=settings)
+    try:
+        assert files[0][1][0] == "proof.pdf"
+        assert files[0][1][1].read() == b"%PDF-data"
+    finally:
+        close_file_tuples(files)
 
 
 def test_write_secret_file_uses_0600(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

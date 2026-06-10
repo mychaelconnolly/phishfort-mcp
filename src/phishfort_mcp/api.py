@@ -18,10 +18,9 @@ from phishfort_mcp.limits import (
 )
 from phishfort_mcp.security import (
     close_file_tuples,
-    file_tuple,
+    open_attachments,
     redact,
     rewind_file_tuples,
-    validate_attachment_paths,
 )
 
 
@@ -55,10 +54,9 @@ class PhishFortClient:
             "x-api-key": self.api_key,
             "User-Agent": "phishfort-mcp/0.1.0",
         }
-        files = []
+        files: list[tuple[str, tuple[str, Any, str]]] = []
         if attachment_paths:
-            paths = validate_attachment_paths(attachment_paths, settings=self.settings)
-            files = [file_tuple(path) for path in paths]
+            files = open_attachments(attachment_paths, settings=self.settings)
         try:
             async with httpx.AsyncClient(
                 timeout=self.settings.timeout_seconds,
@@ -147,14 +145,15 @@ class PhishFortClient:
         attachment_paths: list[str] | None,
     ) -> Any:
         body = self._report_payload(url, incident_type, subject, reported_by, client_id, comment)
+        action_path = f"/incident/{quote(action, safe='')}"
         if attachment_paths:
             return await self.request(
                 "POST",
-                f"/incident/{action}",
+                action_path,
                 form_data=body,
                 attachment_paths=attachment_paths,
             )
-        return await self.request("POST", f"/incident/{action}", json_body=body)
+        return await self.request("POST", action_path, json_body=body)
 
     async def request_incident_action(self, *, incident_id: str, action: str) -> Any:
         return await self.request(
