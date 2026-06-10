@@ -43,10 +43,12 @@ Reviewed before implementation:
 
 Each mutating tool recomputes the digest from its actual parameters before calling PhishFort. Tampered params, expired plans, or wrong phrases fail before network I/O. Destructive operations require `destructive_confirmed=true`.
 
+This is in-process integrity and confirmation, not independent authorization: the same agent that plans a change can also confirm it, so the gate proves *what* runs matches the plan, not that a separate authority approved it. The human-in-the-loop checkpoint is the MCP host's tool-confirmation UI, driven by the destructive annotations the server sets. The default approval salt is a process-stable random value (not derived from the API key), consistent within a server process without coupling to key rotation.
+
 ## Threat Model Notes
 
 - Incident data may contain prompt injection. The server returns data with an explicit untrusted-data warning.
-- Webhook URLs could be used for SSRF. The server blocks localhost/private/reserved hosts by default.
-- Attachment paths could exfiltrate local files. The server requires configured roots, allowed extensions, and resolved-path checks.
-- One-time webhook secrets could leak through tool output. The server removes `secret` from API responses before returning output.
-- API errors could contain credentials. Errors are sanitized before raising.
+- Webhook URLs could be used for SSRF. The server rejects localhost/private/reserved hosts — including legacy decimal/octal/hex IP encodings — by default. Note this is a pre-submit sanity check: the server never fetches the webhook URL (PhishFort delivers webhooks), so backend egress controls are the real boundary.
+- Attachment paths could exfiltrate local files. The server requires configured roots, allowed extensions, and resolved-path checks, and uploads from `O_NOFOLLOW` file handles held since validation to close the validate→open race.
+- One-time webhook secrets could leak through tool output. The server recursively strips `secret`/`token`/`apiKey` keys from API responses before returning output and writes saved secrets through `O_NOFOLLOW` `0600` files.
+- API errors could contain credentials. Errors are sanitized (API key value plus sensitive key names) before raising.
