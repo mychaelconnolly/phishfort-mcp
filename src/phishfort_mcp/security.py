@@ -21,7 +21,14 @@ SENSITIVE_RESPONSE_KEYS = {"secret", "webhooksecret", "token", "apikey", "api_ke
 
 def redact(value: Any, *secrets: str | None) -> Any:
     if isinstance(value, dict):
-        return {key: redact(item, *secrets) for key, item in value.items()}
+        return {
+            key: (
+                "[REDACTED]"
+                if isinstance(key, str) and key.lower() in SENSITIVE_RESPONSE_KEYS
+                else redact(item, *secrets)
+            )
+            for key, item in value.items()
+        }
     if isinstance(value, list):
         return [redact(item, *secrets) for item in value]
     if not isinstance(value, str):
@@ -124,6 +131,15 @@ def close_file_tuples(files: list[tuple[str, tuple[str, Any, str]]]) -> None:
     for _, (_, handle, _) in files:
         try:
             handle.close()
+        except Exception:
+            pass
+
+
+def rewind_file_tuples(files: list[tuple[str, tuple[str, Any, str]]]) -> None:
+    """Reset upload handles to the start so a retried request re-sends the body."""
+    for _, (_, handle, _) in files:
+        try:
+            handle.seek(0)
         except Exception:
             pass
 

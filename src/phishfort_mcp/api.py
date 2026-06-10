@@ -16,7 +16,13 @@ from phishfort_mcp.limits import (
     RETRYABLE_STATUS_CODES,
     TERMINAL_STATUS_CODES,
 )
-from phishfort_mcp.security import close_file_tuples, file_tuple, redact, validate_attachment_paths
+from phishfort_mcp.security import (
+    close_file_tuples,
+    file_tuple,
+    redact,
+    rewind_file_tuples,
+    validate_attachment_paths,
+)
 
 
 class PhishFortApiError(RuntimeError):
@@ -59,15 +65,23 @@ class PhishFortClient:
                 follow_redirects=False,
             ) as client:
                 for attempt in range(self.settings.max_retries + 1):
-                    response = await client.request(
-                        method,
-                        f"{self.settings.base_url}{clean_path}",
-                        params=self._clean_query(query),
-                        headers=headers,
-                        json=json_body if not files and not form_data else None,
-                        data=form_data if form_data or files else None,
-                        files=files or None,
-                    )
+                    if attempt:
+                        rewind_file_tuples(files)
+                    try:
+                        response = await client.request(
+                            method,
+                            f"{self.settings.base_url}{clean_path}",
+                            params=self._clean_query(query),
+                            headers=headers,
+                            json=json_body if not files and not form_data else None,
+                            data=form_data if form_data or files else None,
+                            files=files or None,
+                        )
+                    except httpx.TransportError:
+                        if attempt < self.settings.max_retries:
+                            await asyncio.sleep(self._backoff_seconds(attempt))
+                            continue
+                        raise
                     parsed = self._parse_response(response)
                     if response.status_code < 300:
                         return parsed
