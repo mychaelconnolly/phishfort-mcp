@@ -20,6 +20,10 @@ from phishfort_mcp.limits import (
 PRIVATE_HOSTNAMES = {"localhost", "localhost.localdomain"}
 SENSITIVE_RESPONSE_KEYS = {"secret", "webhooksecret", "token", "apikey", "api_key"}
 
+# O_NOFOLLOW is Unix-only; on platforms without it (e.g. Windows) the symlink
+# hardening degrades to a no-op flag rather than raising AttributeError.
+_O_NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
+
 
 def redact(value: Any, *secrets: str | None) -> Any:
     if isinstance(value, dict):
@@ -158,7 +162,7 @@ def open_attachments(
     files: list[tuple[str, tuple[str, Any, str]]] = []
     try:
         for path in validated:
-            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+            fd = os.open(path, os.O_RDONLY | _O_NOFOLLOW)
             try:
                 if not stat.S_ISREG(os.fstat(fd).st_mode):
                     raise ValueError(f"attachment is not a regular file: {path}")
@@ -204,10 +208,11 @@ def write_secret_file(secret: str, *, settings: Settings, name: str | None = Non
         raise ValueError("secret file name must not escape the secret directory")
     # O_NOFOLLOW: refuse to write through an attacker-planted symlink in the
     # secret dir. O_TRUNC (not O_EXCL) so rotation can overwrite a reused name.
-    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | _O_NOFOLLOW
     fd = os.open(path, flags, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        os.fchmod(handle.fileno(), 0o600)
+        if hasattr(os, "fchmod"):  # Unix-only; mode also set via os.open above
+            os.fchmod(handle.fileno(), 0o600)
         handle.write(secret)
         handle.write("\n")
     return {"secret_file": str(path), "secret_sha256_prefix": digest[:16]}

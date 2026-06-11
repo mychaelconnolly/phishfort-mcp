@@ -593,7 +593,11 @@ def _handle_secret_response(
     scrubbed, found = scrub_secrets(payload)
     response = response_envelope(scrubbed)
     if found:
-        secret = found.get("secret") or next(iter(found.values()))
+        secret = (
+            found.get("webhooksecret")
+            or found.get("secret")
+            or next(iter(found.values()))
+        )
         response["saved_secret"] = write_secret_file(
             secret, settings=settings, name=secret_output_name
         )

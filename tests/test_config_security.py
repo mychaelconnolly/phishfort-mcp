@@ -136,6 +136,21 @@ def test_scrub_secrets_removes_nested_and_listed_keys() -> None:
     assert "tok" not in str(scrubbed)
 
 
+def test_handle_secret_response_prefers_webhook_secret(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from phishfort_mcp.server import _handle_secret_response
+
+    monkeypatch.setenv("PHISHFORT_SECRET_DIR", str(tmp_path))
+    settings = Settings.from_env()
+    # apiKey/token precede webhookSecret in the response; the saved file must hold
+    # the webhook secret, not the first scrubbed value (insertion order).
+    result = {"apiKey": "ak_wrong", "token": "tok_wrong", "webhookSecret": "whsec_real"}
+    response = _handle_secret_response(result, settings=settings, secret_output_name="hook-secret")
+    saved_path = Path(response["saved_secret"]["secret_file"])
+    assert saved_path.read_text(encoding="utf-8").strip() == "whsec_real"
+
+
 def test_write_secret_file_rejects_symlink(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     secret_dir = tmp_path / "secrets"
     secret_dir.mkdir()
