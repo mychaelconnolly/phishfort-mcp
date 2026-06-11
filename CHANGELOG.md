@@ -16,6 +16,10 @@
 - Review follow-up: retry only connect-phase transport errors so an ambiguous read/protocol
   failure can't re-send (and duplicate) a non-idempotent write; close the raw attachment fd
   if `fstat`/`fdopen` raises before the handle is held.
+- Review follow-up (PR #1 P2s): prefer the `webhookSecret` key when persisting a scrubbed
+  secret so a `token`/`apiKey` appearing earlier in the response can't be saved instead;
+  degrade `O_NOFOLLOW`/`fchmod` filesystem hardening to a no-op on non-POSIX platforms
+  (e.g. Windows) instead of raising `AttributeError`.
 
 ## 0.1.0 - 2026-06-02
 
