@@ -120,6 +120,46 @@ async def test_error_redacts_api_key(monkeypatch: pytest.MonkeyPatch, tmp_path: 
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_error_redacts_secret_keys(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    respx.get("https://api.test/v1/whoami").mock(
+        return_value=httpx.Response(401, json={"error": "nope", "secret": "hook-secret"})
+    )
+    with pytest.raises(PhishFortApiError) as exc:
+        await PhishFortClient(_settings(monkeypatch, tmp_path)).whoami()
+    assert "hook-secret" not in str(exc.value)
+    assert "[REDACTED]" in str(exc.value)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_transport_error_retries(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    async def fake_sleep(_seconds: float) -> None:
+        return None
+
+    monkeypatch.setattr("phishfort_mcp.api.asyncio.sleep", fake_sleep)
+    route = respx.get("https://api.test/v1/whoami").mock(
+        side_effect=[
+            httpx.ConnectError("boom"),
+            httpx.Response(200, json={"message": "success"}),
+        ]
+    )
+    await PhishFortClient(_settings(monkeypatch, tmp_path)).whoami()
+    assert route.call_count == 2
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_read_timeout_not_retried(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    # Read-phase errors are ambiguous (the server may have processed the request),
+    # so they must not be retried — re-sending could duplicate a non-idempotent write.
+    route = respx.get("https://api.test/v1/whoami").mock(side_effect=httpx.ReadTimeout("boom"))
+    with pytest.raises(httpx.ReadTimeout):
+        await PhishFortClient(_settings(monkeypatch, tmp_path)).whoami()
+    assert route.call_count == 1
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_429_retries(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     async def fake_sleep(_seconds: float) -> None:
         return None

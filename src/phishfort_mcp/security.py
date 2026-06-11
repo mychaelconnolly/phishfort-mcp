@@ -5,6 +5,8 @@ import hmac
 import ipaddress
 import mimetypes
 import os
+import socket
+import stat
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -16,11 +18,19 @@ from phishfort_mcp.limits import (
     MAX_MULTIPART_BYTES,
 )
 PRIVATE_HOSTNAMES = {"localhost", "localhost.localdomain"}
+SENSITIVE_RESPONSE_KEYS = {"secret", "webhooksecret", "token", "apikey", "api_key"}
 
 
 def redact(value: Any, *secrets: str | None) -> Any:
     if isinstance(value, dict):
-        return {key: redact(item, *secrets) for key, item in value.items()}
+        return {
+            key: (
+                "[REDACTED]"
+                if isinstance(key, str) and key.lower() in SENSITIVE_RESPONSE_KEYS
+                else redact(item, *secrets)
+            )
+            for key, item in value.items()
+        }
     if isinstance(value, list):
         return [redact(item, *secrets) for item in value]
     if not isinstance(value, str):
@@ -32,14 +42,61 @@ def redact(value: Any, *secrets: str | None) -> Any:
     return redacted
 
 
+def scrub_secrets(value: Any) -> tuple[Any, dict[str, str]]:
+    """Recursively strip sensitive keys from an API response.
+
+    Returns the scrubbed value plus a mapping of removed key (lowercased) to the
+    first string value seen, so callers can persist a one-time webhook secret
+    without it ever reaching tool output. Removal is by key name regardless of
+    nesting depth or response shape.
+    """
+    found: dict[str, str] = {}
+
+    def _walk(node: Any) -> Any:
+        if isinstance(node, dict):
+            cleaned: dict[str, Any] = {}
+            for key, item in node.items():
+                if isinstance(key, str) and key.lower() in SENSITIVE_RESPONSE_KEYS:
+                    if isinstance(item, str):
+                        found.setdefault(key.lower(), item)
+                    continue
+                cleaned[key] = _walk(item)
+            return cleaned
+        if isinstance(node, list):
+            return [_walk(item) for item in node]
+        return node
+
+    return _walk(value), found
+
+
+def _legacy_ipv4(host: str) -> ipaddress.IPv4Address | None:
+    """Resolve non-canonical IPv4 forms (decimal/octal/hex) that URL stacks accept.
+
+    e.g. "2130706433", "0x7f.1", "0177.0.0.1" all map to 127.0.0.1; the stdlib
+    ``ipaddress`` parser rejects them, so they would otherwise slip past as plain
+    hostnames.
+    """
+    if not host or host[0] not in "0123456789":
+        return None
+    try:
+        packed = socket.inet_aton(host)
+    except OSError:
+        return None
+    return ipaddress.IPv4Address(packed)
+
+
 def is_private_host(hostname: str) -> bool:
     lowered = hostname.strip().lower().rstrip(".")
     if lowered in PRIVATE_HOSTNAMES or lowered.endswith(".localhost"):
         return True
+    candidate = lowered.strip("[]")
     try:
-        address = ipaddress.ip_address(lowered.strip("[]"))
+        address = ipaddress.ip_address(candidate)
     except ValueError:
-        return False
+        legacy = _legacy_ipv4(candidate)
+        if legacy is None:
+            return False
+        address = legacy
     return (
         address.is_private
         or address.is_loopback
@@ -87,9 +144,34 @@ def validate_attachment_paths(paths: list[str] | None, *, settings: Settings) ->
     return resolved
 
 
-def file_tuple(path: Path) -> tuple[str, tuple[str, Any, str]]:
-    mime_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-    return ("attachments", (path.name, path.open("rb"), mime_type))
+def open_attachments(
+    paths: list[str], *, settings: Settings
+) -> list[tuple[str, tuple[str, Any, str]]]:
+    """Validate and open attachment files, holding the fds to close the TOCTOU window.
+
+    Each resolved path is opened with ``O_NOFOLLOW`` so a symlink swapped in after
+    validation cannot redirect the upload, and ``fstat`` confirms a regular file.
+    The returned handles are uploaded directly, so the bytes sent are the bytes
+    that were validated.
+    """
+    validated = validate_attachment_paths(paths, settings=settings)
+    files: list[tuple[str, tuple[str, Any, str]]] = []
+    try:
+        for path in validated:
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+            try:
+                if not stat.S_ISREG(os.fstat(fd).st_mode):
+                    raise ValueError(f"attachment is not a regular file: {path}")
+                handle = os.fdopen(fd, "rb")
+            except BaseException:
+                os.close(fd)
+                raise
+            mime_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+            files.append(("attachments", (path.name, handle, mime_type)))
+    except BaseException:
+        close_file_tuples(files)
+        raise
+    return files
 
 
 def close_file_tuples(files: list[tuple[str, tuple[str, Any, str]]]) -> None:
@@ -100,19 +182,34 @@ def close_file_tuples(files: list[tuple[str, tuple[str, Any, str]]]) -> None:
             pass
 
 
+def rewind_file_tuples(files: list[tuple[str, tuple[str, Any, str]]]) -> None:
+    """Reset upload handles to the start so a retried request re-sends the body."""
+    for _, (_, handle, _) in files:
+        try:
+            handle.seek(0)
+        except Exception:
+            pass
+
+
 def write_secret_file(secret: str, *, settings: Settings, name: str | None = None) -> dict[str, str]:
     settings.secret_dir.mkdir(parents=True, exist_ok=True)
+    os.chmod(settings.secret_dir, 0o700)
+    resolved_dir = settings.secret_dir.resolve(strict=True)
     digest = hashlib.sha256(secret.encode("utf-8")).hexdigest()
     safe_name = (name or f"phishfort-webhook-{digest[:12]}.txt").replace("/", "_")
     if not safe_name.endswith(".txt"):
         safe_name = f"{safe_name}.txt"
-    path = settings.secret_dir / safe_name
-    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+    path = resolved_dir / safe_name
+    if path.parent != resolved_dir:
+        raise ValueError("secret file name must not escape the secret directory")
+    # O_NOFOLLOW: refuse to write through an attacker-planted symlink in the
+    # secret dir. O_TRUNC (not O_EXCL) so rotation can overwrite a reused name.
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW
     fd = os.open(path, flags, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        os.fchmod(handle.fileno(), 0o600)
         handle.write(secret)
         handle.write("\n")
-    os.chmod(path, 0o600)
     return {"secret_file": str(path), "secret_sha256_prefix": digest[:16]}
 
 

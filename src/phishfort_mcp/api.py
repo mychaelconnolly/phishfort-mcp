@@ -16,7 +16,12 @@ from phishfort_mcp.limits import (
     RETRYABLE_STATUS_CODES,
     TERMINAL_STATUS_CODES,
 )
-from phishfort_mcp.security import close_file_tuples, file_tuple, redact, validate_attachment_paths
+from phishfort_mcp.security import (
+    close_file_tuples,
+    open_attachments,
+    redact,
+    rewind_file_tuples,
+)
 
 
 class PhishFortApiError(RuntimeError):
@@ -49,25 +54,37 @@ class PhishFortClient:
             "x-api-key": self.api_key,
             "User-Agent": "phishfort-mcp/0.1.0",
         }
-        files = []
+        files: list[tuple[str, tuple[str, Any, str]]] = []
         if attachment_paths:
-            paths = validate_attachment_paths(attachment_paths, settings=self.settings)
-            files = [file_tuple(path) for path in paths]
+            files = open_attachments(attachment_paths, settings=self.settings)
         try:
             async with httpx.AsyncClient(
                 timeout=self.settings.timeout_seconds,
                 follow_redirects=False,
             ) as client:
                 for attempt in range(self.settings.max_retries + 1):
-                    response = await client.request(
-                        method,
-                        f"{self.settings.base_url}{clean_path}",
-                        params=self._clean_query(query),
-                        headers=headers,
-                        json=json_body if not files and not form_data else None,
-                        data=form_data if form_data or files else None,
-                        files=files or None,
-                    )
+                    if attempt:
+                        rewind_file_tuples(files)
+                    try:
+                        response = await client.request(
+                            method,
+                            f"{self.settings.base_url}{clean_path}",
+                            params=self._clean_query(query),
+                            headers=headers,
+                            json=json_body if not files and not form_data else None,
+                            data=form_data if form_data or files else None,
+                            files=files or None,
+                        )
+                    except (httpx.ConnectError, httpx.ConnectTimeout):
+                        # Only connect-phase failures are safe to retry: the request
+                        # never reached the server, so re-sending a non-idempotent write
+                        # (report/comment/webhook) cannot duplicate it. Read/protocol
+                        # errors are ambiguous (the server may have processed it) and are
+                        # not retried.
+                        if attempt < self.settings.max_retries:
+                            await asyncio.sleep(self._backoff_seconds(attempt))
+                            continue
+                        raise
                     parsed = self._parse_response(response)
                     if response.status_code < 300:
                         return parsed
@@ -133,14 +150,15 @@ class PhishFortClient:
         attachment_paths: list[str] | None,
     ) -> Any:
         body = self._report_payload(url, incident_type, subject, reported_by, client_id, comment)
+        action_path = f"/incident/{quote(action, safe='')}"
         if attachment_paths:
             return await self.request(
                 "POST",
-                f"/incident/{action}",
+                action_path,
                 form_data=body,
                 attachment_paths=attachment_paths,
             )
-        return await self.request("POST", f"/incident/{action}", json_body=body)
+        return await self.request("POST", action_path, json_body=body)
 
     async def request_incident_action(self, *, incident_id: str, action: str) -> Any:
         return await self.request(

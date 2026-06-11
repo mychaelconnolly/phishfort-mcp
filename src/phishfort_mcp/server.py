@@ -28,6 +28,7 @@ from phishfort_mcp.schemas import (
 )
 from phishfort_mcp.security import (
     read_secret_file,
+    scrub_secrets,
     validate_attachment_paths,
     validate_webhook_url,
     verify_signature,
@@ -589,12 +590,12 @@ def _handle_secret_response(
     result: Any, *, settings: Settings, secret_output_name: str | None
 ) -> dict[str, Any]:
     payload = result if isinstance(result, dict) else {"data": result}
-    data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
-    secret = data.pop("secret", None) if isinstance(data, dict) else None
-    response = response_envelope(payload)
-    if secret:
+    scrubbed, found = scrub_secrets(payload)
+    response = response_envelope(scrubbed)
+    if found:
+        secret = found.get("secret") or next(iter(found.values()))
         response["saved_secret"] = write_secret_file(
-            str(secret), settings=settings, name=secret_output_name
+            secret, settings=settings, name=secret_output_name
         )
         response["secret_returned"] = False
     return response

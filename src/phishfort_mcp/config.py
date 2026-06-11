@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
@@ -11,6 +12,12 @@ from dotenv import load_dotenv
 DEFAULT_BASE_URL = "https://capi.phishfort.com/v1"
 DEFAULT_ATTACHMENT_ROOT = "."
 DEFAULT_SECRET_DIR = "~/.config/phishfort-mcp/secrets"
+MAX_RETRIES_CEILING = 5
+
+# Process-stable random salt used when PHISHFORT_MCP_APPROVAL_SALT is unset.
+# It only needs to be consistent within one server process (plan and validate
+# run in the same stdio process); it is not a cross-trust-boundary secret.
+_DEFAULT_APPROVAL_SALT = secrets.token_hex(32)
 
 
 def _bool_env(name: str, default: bool) -> bool:
@@ -54,10 +61,12 @@ class Settings:
             api_key=api_key,
             api_key_file=api_key_file,
             timeout_seconds=float(os.environ.get("PHISHFORT_TIMEOUT_SECONDS", "30")),
-            max_retries=max(0, int(os.environ.get("PHISHFORT_MAX_RETRIES", "3"))),
+            max_retries=min(
+                MAX_RETRIES_CEILING, max(0, int(os.environ.get("PHISHFORT_MAX_RETRIES", "3")))
+            ),
             approval_salt=(
                 os.environ.get("PHISHFORT_MCP_APPROVAL_SALT", "").strip()
-                or (api_key[-24:] if api_key else "phishfort-mcp-local")
+                or _DEFAULT_APPROVAL_SALT
             ),
             secret_dir=Path(
                 os.environ.get("PHISHFORT_SECRET_DIR", DEFAULT_SECRET_DIR).strip()
