@@ -159,11 +159,15 @@ def open_attachments(
     try:
         for path in validated:
             fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
-            if not stat.S_ISREG(os.fstat(fd).st_mode):
+            try:
+                if not stat.S_ISREG(os.fstat(fd).st_mode):
+                    raise ValueError(f"attachment is not a regular file: {path}")
+                handle = os.fdopen(fd, "rb")
+            except BaseException:
                 os.close(fd)
-                raise ValueError(f"attachment is not a regular file: {path}")
+                raise
             mime_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-            files.append(("attachments", (path.name, os.fdopen(fd, "rb"), mime_type)))
+            files.append(("attachments", (path.name, handle, mime_type)))
     except BaseException:
         close_file_tuples(files)
         raise

@@ -75,7 +75,12 @@ class PhishFortClient:
                             data=form_data if form_data or files else None,
                             files=files or None,
                         )
-                    except httpx.TransportError:
+                    except (httpx.ConnectError, httpx.ConnectTimeout):
+                        # Only connect-phase failures are safe to retry: the request
+                        # never reached the server, so re-sending a non-idempotent write
+                        # (report/comment/webhook) cannot duplicate it. Read/protocol
+                        # errors are ambiguous (the server may have processed it) and are
+                        # not retried.
                         if attempt < self.settings.max_retries:
                             await asyncio.sleep(self._backoff_seconds(attempt))
                             continue

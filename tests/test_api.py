@@ -149,6 +149,17 @@ async def test_transport_error_retries(monkeypatch: pytest.MonkeyPatch, tmp_path
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_read_timeout_not_retried(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    # Read-phase errors are ambiguous (the server may have processed the request),
+    # so they must not be retried — re-sending could duplicate a non-idempotent write.
+    route = respx.get("https://api.test/v1/whoami").mock(side_effect=httpx.ReadTimeout("boom"))
+    with pytest.raises(httpx.ReadTimeout):
+        await PhishFortClient(_settings(monkeypatch, tmp_path)).whoami()
+    assert route.call_count == 1
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_429_retries(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     async def fake_sleep(_seconds: float) -> None:
         return None

@@ -13,6 +13,9 @@
 - Clarified README/security-review claims: the approval gate is in-process
   integrity/confirmation (not independent authorization) and the webhook URL check is a
   pre-submit sanity check (the server never fetches the URL).
+- Review follow-up: retry only connect-phase transport errors so an ambiguous read/protocol
+  failure can't re-send (and duplicate) a non-idempotent write; close the raw attachment fd
+  if `fstat`/`fdopen` raises before the handle is held.
 
 ## 0.1.0 - 2026-06-02
 
